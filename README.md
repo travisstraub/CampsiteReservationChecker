@@ -87,6 +87,6 @@ Set `RC_API_URL` to point the app at a mock server instead of the live ReserveCa
 
 ## Caveats
 
-- ReserveCalifornia has no public API. The app uses the same undocumented `calirdr.usedirect.com` endpoints as its website, which may change or block requests from cloud servers. Errors appear on each alert ("Last check failed: …") and in the workflow output.
+- ReserveCalifornia has no public API. The app uses the same undocumented API as its website (hosted by Tyler Technologies at `california-rdr.prod.cali.rd12.recreation-management.tylerapp.com`; it moved from `calirdr.usedirect.com` in late 2025), which may change or block requests from cloud servers. Errors appear on each alert ("Last check failed: …") and in the workflow output.
 - Please don't check more often than every 5 minutes.
 - A notification tells you a site is open. You still have to book it yourself on ReserveCalifornia.

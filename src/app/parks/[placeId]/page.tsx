@@ -47,10 +47,10 @@ export default async function ParkPage({ params, searchParams }: PageProps<"/par
                 {c.available !== null && (
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      c.available > 0 ? "bg-accent-soft text-accent" : "bg-line/60 text-muted"
+                      c.available ? "bg-accent-soft text-accent" : "bg-line/60 text-muted"
                     }`}
                   >
-                    {c.available > 0 ? `${c.available} open` : "Full"}
+                    {c.available ? "Sites open" : "Full"}
                   </span>
                 )}
               </Link>
