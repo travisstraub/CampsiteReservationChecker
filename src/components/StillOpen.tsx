@@ -28,11 +28,16 @@ export default function StillOpen({ facilityId, unitId, arrival, nights }: Props
   }, [facilityId, unitId, arrival, nights]);
 
   const styles = {
-    checking: ["bg-line/60 text-muted", "Checking…"],
-    open: ["bg-accent-soft text-accent", "✓ Still open"],
-    gone: ["bg-danger/10 text-danger", "✗ No longer open"],
-    error: ["bg-line/60 text-muted", "Couldn't check"],
+    checking: ["badge-muted", "Checking…"],
+    open: ["badge-open", "Still open"],
+    gone: ["badge-danger", "No longer open"],
+    error: ["badge-muted", "Couldn't check"],
   } as const;
   const [cls, label] = styles[status];
-  return <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
+  return (
+    <span className={`badge ${cls}`}>
+      {status === "open" && <span className="h-1.5 w-1.5 rounded-full bg-open" />}
+      {label}
+    </span>
+  );
 }
