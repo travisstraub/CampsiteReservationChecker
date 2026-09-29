@@ -32,13 +32,22 @@ export function bookingUrl(placeId: string | null, facilityId: string): string {
 }
 
 async function rc<T>(path: string, init?: { body?: unknown }): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    method: init?.body ? "POST" : "GET",
-    headers: HEADERS,
-    body: init?.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, {
+      method: init?.body ? "POST" : "GET",
+      headers: HEADERS,
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (e) {
+    // Node reports every network failure as "fetch failed"; the reason is in `cause`.
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    const reason = cause?.code ?? cause?.message ?? (e as Error).message;
+    console.error(`ReserveCalifornia ${path} request failed`, e);
+    throw new Error(`ReserveCalifornia ${path} request failed: ${reason}`);
+  }
   if (!res.ok) throw new Error(`ReserveCalifornia ${path} returned HTTP ${res.status}`);
   return (await res.json()) as T;
 }
