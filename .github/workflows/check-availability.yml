@@ -1,0 +1,30 @@
+name: Check campsite availability
+
+# Vercel's Hobby plan only runs cron jobs once a day, so GitHub Actions calls the
+# app's check endpoint instead. GitHub may delay scheduled runs by a few minutes.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: check-availability
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Call /api/cron/check
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::warning::Set the APP_URL variable and CRON_SECRET secret to enable checks."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/check"

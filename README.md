@@ -1,84 +1,92 @@
-# Campsite Reservation Checker
+# Campsite Watch
 
-This script checks [ReserveCalifornia](https://www.reservecalifornia.com/) on a schedule and texts you when a campsite you want becomes available. It can run on a VPS, on a NAS (Synology, QNAP, Unraid, TrueNAS) or on any machine that has Python 3.9+ or Docker.
+Campsite Watch is a web app for finding campsites through [ReserveCalifornia](https://www.reservecalifornia.com/) and getting a **phone notification** when a site you want opens up. It runs on Vercel.
 
-- Watch one or more campgrounds, either for specific site numbers or for any site
-- Limit alerts by date range, minimum number of nights and allowed arrival days (for example, weekends only)
-- Send SMS through **Twilio** (reliable, about $0.01 per text) or free through your carrier's **email-to-SMS gateway**
-- A state file keeps track of what you've already been told about, so you get one text per opening. If a site is booked and then opens up again, you get a new text.
+- **Search** California state parks. You see each campground and how many sites are open.
+- **Availability grid**: see which sites are free, night by night, for 7, 14 or 30 days.
+- **Alerts**: watch a campground, or only the sites you tick, for a date range. You can set a minimum number of nights and allowed arrival days (for example, Fri/Sat only).
+- **Notifications** use Web Push. On **iPhone**, add the site to your Home Screen from Safari (iOS 16.4+), then turn on notifications in **Settings**. Web Push also works in desktop Chrome, Edge, Firefox and Safari, and on Android. Tapping a notification opens the campground on ReserveCalifornia so you can book it.
+- **Accounts**: email/password sign-ups through Supabase Auth.
 
-## 1. Configure
+## How it works
+
+```
+GitHub Actions (every 5 min) ──► /api/cron/check on Vercel
+                                   │  loads active alerts (Supabase)
+                                   │  one availability lookup per campground (ReserveCalifornia)
+                                   │  finds new openings and skips ones already sent
+                                   └► Web Push to each of the user's devices
+```
+
+Vercel's free Hobby plan only runs cron jobs once a day, so a GitHub Actions schedule calls the check endpoint instead (`.github/workflows/check-availability.yml`). If you're on Vercel Pro, you can use Vercel Cron instead; it sends the same `Authorization: Bearer $CRON_SECRET` header.
+
+Each opening is sent once. If the site is booked and later opens up again, you're notified again. An opening only counts as sent once it reaches at least one of your devices, so if you create an alert before turning on notifications, you'll still hear about openings that are already there.
+
+## Setup
+
+### 1. Supabase
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the **SQL Editor**, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+3. Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `https://<your-app>.vercel.app/auth/confirm` to **Redirect URLs**.
+4. Copy the project URL, the publishable key and the secret key from **Project Settings → API Keys**.
+
+Email confirmation is on by default. Supabase's built-in email sender is rate-limited, so for real use set up custom SMTP under **Authentication → Emails**.
+
+### 2. Web Push keys
 
 ```bash
-cp config.example.toml config.toml
+npx web-push generate-vapid-keys
 ```
 
-Then edit `config.toml`:
+### 3. Vercel
 
-- **Campground IDs** come from the ReserveCalifornia URL:
-  `https://www.reservecalifornia.com/Web/#!park/<park_id>/<facility_id>`.
-  For example, Wright's Beach is `park/718/706`.
-- **`sites`**: the site numbers you care about. `"5"`, `"005"` and `"Site 005"` all match. Leave the list empty to match any site.
-- **`nights`**: the minimum number of consecutive nights.
-- **`arrival_days`**: optional, for example `["Fri", "Sat"]`.
+Import the repo into Vercel and set these environment variables (see `.env.example`):
 
-To watch several campgrounds, add another `[[watch]]` block for each one.
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (the legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works) |
+| `SUPABASE_SECRET_KEY` | Supabase secret key (or legacy `SUPABASE_SERVICE_ROLE_KEY`). Server only. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key |
+| `VAPID_PRIVATE_KEY` | VAPID private key |
+| `VAPID_SUBJECT` | `mailto:you@example.com`. Apple rejects placeholder addresses. |
+| `CRON_SECRET` | A long random string, for example from `openssl rand -hex 32` |
 
-### SMS options
+### 4. GitHub Actions schedule
 
-**Twilio (recommended).** Create an account, buy a phone number and fill in the `[twilio]` section. US numbers also need A2P 10DLC or toll-free verification before messages are delivered reliably.
+In the GitHub repo, go to **Settings → Secrets and variables → Actions** and add:
 
-**Email-to-SMS (free).** Set `[email] enabled = true` and send to your carrier's gateway, such as `5551234567@vtext.com` (Verizon), `@tmomail.net` (T-Mobile) or `@txt.att.net` (AT&T). With Gmail, use an [App Password](https://myaccount.google.com/apppasswords).
+- **Variable** `APP_URL`: your deployed URL, for example `https://campsite-watch.vercel.app`
+- **Secret** `CRON_SECRET`: the same value you set in Vercel
 
-You can supply secrets as environment variables instead of writing them in the file: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_TO_NUMBER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`.
+Then open **Actions → Check campsite availability → Run workflow** to test it. The response lists how many alerts and campgrounds were checked, and any errors.
 
-To check that alerts reach your phone:
+GitHub may delay scheduled runs by a few minutes when it's busy. In public repos, it pauses schedules after 60 days without commits.
 
-```bash
-python campsite_checker.py --test-notify
-```
+### 5. On your iPhone
 
-## 2. Run
+1. Open the site in **Safari**, tap **Share → Add to Home Screen**.
+2. Open **Campsites** from the Home Screen and sign in.
+3. Go to **Settings → Turn on notifications**, allow them, then tap **Send test notification**.
 
-### Option A: Docker (best for a NAS)
-
-```bash
-mkdir -p data && cp config.toml data/
-docker compose up -d --build
-docker compose logs -f
-```
-
-The container checks every `interval_minutes` and restarts automatically. On Synology, open **Container Manager → Project → Create**, point it at this folder and use the included `docker-compose.yml`.
-
-### Option B: systemd service (VPS)
-
-```bash
-sudo useradd -r -s /usr/sbin/nologin campsite
-sudo git clone <this repo> /opt/campsite-checker && cd /opt/campsite-checker
-sudo python3 -m venv .venv && sudo .venv/bin/pip install -r requirements.txt
-sudo cp config.example.toml config.toml && sudo nano config.toml
-sudo chown -R campsite: /opt/campsite-checker
-sudo cp deploy/campsite-checker.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now campsite-checker
-journalctl -u campsite-checker -f
-```
-
-### Option C: cron / NAS Task Scheduler
-
-Use `--once` so each run does a single check and exits:
-
-```cron
-*/10 * * * * cd /path/to/CampsiteReservationChecker && .venv/bin/python campsite_checker.py --once >> checker.log 2>&1
-```
-
-## Notes
-
-- Please don't set the interval too low. Every 5–15 minutes is plenty and less likely to get you rate-limited.
-- The script calls the same unofficial `calirdr.usedirect.com` API that the ReserveCalifornia website uses. If they change it, the script may need updating. Run it with `-v` to see debug output.
-- A text only tells you a site is open. You still need to book it yourself, quickly.
+Repeat this on every device you want alerts on.
 
 ## Development
 
 ```bash
-python -m unittest discover -s tests -t .
+cp .env.example .env.local   # fill in values
+npm install
+npm run dev
+npm test          # unit tests (vitest)
+npm run lint
+npm run typecheck
 ```
+
+Set `RC_API_URL` to point the app at a mock server instead of the live ReserveCalifornia API.
+
+## Caveats
+
+- ReserveCalifornia has no public API. The app uses the same undocumented `calirdr.usedirect.com` endpoints as its website, which may change or block requests from cloud servers. Errors appear on each alert ("Last check failed: …") and in the workflow output.
+- Please don't check more often than every 5 minutes.
+- A notification tells you a site is open. You still have to book it yourself on ReserveCalifornia.
