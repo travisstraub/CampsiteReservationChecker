@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createAlert } from "@/app/alerts/actions";
 import type { Unit } from "@/lib/availability";
-import { addDays, dateRange, dayOfWeek, WEEKDAYS } from "@/lib/dates";
+import { addDays, dateRange, dayOfWeek, formatLocalTime, WEEKDAYS } from "@/lib/dates";
 
 type Props = {
   facilityId: string;
@@ -146,8 +146,16 @@ export default function AvailabilityExplorer(props: Props) {
                     {days.map((d) => (
                       <td key={d} className="px-0.5 py-1.5">
                         <div
-                          title={`${u.label} ${d}: ${open.has(d) ? "available" : "not available"}`}
-                          className={`mx-auto h-6 w-6 rounded ${open.has(d) ? "bg-open" : "bg-line/60"}`}
+                          title={`${u.label} ${d}: ${
+                            open.has(d)
+                              ? "available"
+                              : u.locked[d]
+                                ? `locked until ${formatLocalTime(u.locked[d])}`
+                                : "not available"
+                          }`}
+                          className={`mx-auto h-6 w-6 rounded ${
+                            open.has(d) ? "bg-open" : u.locked[d] ? "bg-lock/70" : "bg-line/60"
+                          }`}
                         />
                       </td>
                     ))}
@@ -168,6 +176,7 @@ export default function AvailabilityExplorer(props: Props) {
       <p className="-mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-open" /> Available</span>
         <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-line" /> Booked or closed</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-lock/70" /> Just released, unlocks soon</span>
         <span>Tick sites to watch just those.</span>
       </p>
 

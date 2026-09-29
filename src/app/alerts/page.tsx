@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { formatShort, WEEKDAYS } from "@/lib/dates";
-import { bookingUrl } from "@/lib/reservecalifornia";
+import { formatLocalTime, formatShort, WEEKDAYS } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { deleteAlert, setAlertActive } from "./actions";
 
@@ -21,7 +20,7 @@ type AlertRow = {
   active: boolean;
   last_checked_at: string | null;
   last_error: string | null;
-  alert_openings: { site_label: string; arrival: string; nights: number }[];
+  alert_openings: { site_label: string; arrival: string; nights: number; kind: "open" | "unlock"; unlock_at: string | null }[];
 };
 
 export default async function AlertsPage({ searchParams }: PageProps<"/alerts">) {
@@ -30,7 +29,7 @@ export default async function AlertsPage({ searchParams }: PageProps<"/alerts">)
   const [{ data: alerts, error }, { count: devices }] = await Promise.all([
     supabase
       .from("alerts")
-      .select("*, alert_openings(site_label, arrival, nights)")
+      .select("*, alert_openings(site_label, arrival, nights, kind, unlock_at)")
       .order("created_at", { ascending: false })
       .returns<AlertRow[]>(),
     supabase.from("push_subscriptions").select("id", { count: "exact", head: true }),
@@ -85,19 +84,30 @@ export default async function AlertsPage({ searchParams }: PageProps<"/alerts">)
             </dl>
             {a.alert_openings.length > 0 && (
               <div className="rounded-lg bg-accent-soft p-3 text-sm">
-                <p className="font-medium text-accent">Open now:</p>
-                <ul className="mt-1">
-                  {a.alert_openings
-                    .toSorted((x, y) => x.arrival.localeCompare(y.arrival))
-                    .map((o) => (
-                      <li key={`${o.site_label}-${o.arrival}`}>
-                        {o.site_label}: {formatShort(o.arrival)} ({o.nights} night{o.nights === 1 ? "" : "s"})
-                      </li>
-                    ))}
-                </ul>
-                <a className="mt-2 inline-block text-accent underline" href={bookingUrl(a.place_id, a.facility_id)} target="_blank" rel="noreferrer">
-                  Book on ReserveCalifornia ↗
-                </a>
+                {(["open", "unlock"] as const).map((kind) => {
+                  const list = a.alert_openings
+                    .filter((o) => o.kind === kind)
+                    .toSorted((x, y) => x.arrival.localeCompare(y.arrival));
+                  if (!list.length) return null;
+                  return (
+                    <div key={kind} className="mb-2">
+                      <p className={`font-medium ${kind === "open" ? "text-accent" : "text-lock"}`}>
+                        {kind === "open" ? "Open now:" : "Unlocking soon:"}
+                      </p>
+                      <ul className="mt-1">
+                        {list.map((o) => (
+                          <li key={`${o.site_label}-${o.arrival}`}>
+                            {o.site_label}: {formatShort(o.arrival)} ({o.nights} night{o.nights === 1 ? "" : "s"})
+                            {o.unlock_at && `, unlocks ${formatLocalTime(o.unlock_at)}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+                <Link className="btn mt-1" href={`/alerts/${a.id}`}>
+                  Book it →
+                </Link>
               </div>
             )}
             <p className="text-xs text-muted">

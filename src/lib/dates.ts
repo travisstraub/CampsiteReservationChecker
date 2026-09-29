@@ -38,6 +38,32 @@ export function todayInCalifornia(now: Date = new Date()): string {
   }).format(now);
 }
 
+/** Current local time in California as "YYYY-MM-DDTHH:MM:SS" (no zone). */
+export function nowInCalifornia(now: Date = new Date()): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+/** "8:00 AM Tue, Oct 6" for a California-local "YYYY-MM-DDTHH:MM:SS". */
+export function formatLocalTime(local: string): string {
+  const [h, m] = local.slice(11, 16).split(":").map(Number);
+  const time = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+  return `${time} ${formatShort(local.slice(0, 10))}`;
+}
+
 /** ReserveCalifornia's API wants MM-DD-YYYY. */
 export function toRcDate(iso: string): string {
   const [y, m, d] = iso.split("-");
