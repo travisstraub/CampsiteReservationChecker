@@ -1,0 +1,8 @@
+services:
+  campsite-checker:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./data:/data   # put config.toml here; state.json is written here too
+    environment:
+      - TZ=America/Los_Angeles

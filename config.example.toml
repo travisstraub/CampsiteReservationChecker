@@ -1,0 +1,39 @@
+# Copy to config.toml and edit.  Secrets can instead be supplied as environment
+# variables (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER,
+# TWILIO_TO_NUMBER, SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD).
+
+[settings]
+interval_minutes = 10          # how often to check when running as a service
+state_file = "state.json"      # remembers what you've already been alerted about
+
+# One [[watch]] block per campground.  IDs come from the ReserveCalifornia URL:
+#   https://www.reservecalifornia.com/Web/#!park/<park_id>/<facility_id>
+[[watch]]
+name = "Wright's Beach"
+park_id = "718"
+facility_id = "706"
+start_date = "2026-10-01"      # optional, defaults to today
+end_date = "2027-03-31"        # optional, defaults to today + 180 days
+nights = 2                     # minimum consecutive nights
+sites = []                     # e.g. ["5", "7", "Site 009"]; empty = any site
+arrival_days = ["Fri", "Sat"]  # optional; empty/omitted = any day
+
+# --- SMS via Twilio (reliable, ~$0.01/text) ---------------------------------
+[twilio]
+enabled = true
+account_sid = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+auth_token = "your_auth_token"
+from_number = "+15551234567"   # your Twilio number
+to_numbers = ["+15557654321"]  # your cell
+
+# --- SMS via email-to-SMS gateway (free, less reliable) ---------------------
+# e.g. 5557654321@vtext.com (Verizon), @tmomail.net (T-Mobile),
+#      @txt.att.net (AT&T).  Gmail needs an App Password.
+[email]
+enabled = false
+smtp_host = "smtp.gmail.com"
+smtp_port = 587
+username = "you@gmail.com"
+password = "your-app-password"
+from_address = "you@gmail.com"
+to_addresses = ["5557654321@vtext.com"]
