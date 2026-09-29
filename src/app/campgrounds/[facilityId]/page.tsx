@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import AvailabilityExplorer from "@/components/AvailabilityExplorer";
+import BackLink from "@/components/BackLink";
+import { ArrowUpRight } from "@/components/Icons";
 import { isIsoDate, todayInCalifornia } from "@/lib/dates";
 import { bookingUrl, getCampground, getPark } from "@/lib/reservecalifornia";
 import { getUser } from "@/lib/supabase/server";
@@ -15,20 +16,18 @@ export default async function CampgroundPage({ params, searchParams }: PageProps
   const [park, user] = await Promise.all([getPark(campground.placeId), getUser()]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <Link href={`/parks/${campground.placeId}`} className="text-sm text-muted hover:text-accent">
-          ← {park?.name ?? "Park"}
-        </Link>
-        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-2xl font-semibold">{campground.name}</h1>
+        <BackLink href={`/parks/${campground.placeId}`}>{park?.name ?? "Park"}</BackLink>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <h1 className="title-lg">{campground.name}</h1>
           <a
-            className="text-sm text-accent underline"
+            className="btn-tinted btn-sm"
             href={bookingUrl(campground.placeId, facilityId)}
             target="_blank"
             rel="noreferrer"
           >
-            Book on ReserveCalifornia ↗
+            ReserveCalifornia <ArrowUpRight size={14} strokeWidth={2.2} />
           </a>
         </div>
       </div>

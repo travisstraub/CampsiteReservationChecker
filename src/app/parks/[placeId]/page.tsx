@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import BackLink from "@/components/BackLink";
+import { ChevronRight } from "@/components/Icons";
+import StayPicker from "@/components/StayPicker";
 import { addDays, isIsoDate, todayInCalifornia } from "@/lib/dates";
 import { getPark, listCampgrounds } from "@/lib/reservecalifornia";
 
@@ -15,49 +18,40 @@ export default async function ParkPage({ params, searchParams }: PageProps<"/par
   const campgrounds = await listCampgrounds(placeId, date, nights);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <Link href="/" className="text-sm text-muted hover:text-accent">← Search</Link>
-        <h1 className="mt-1 text-2xl font-semibold">{park.name}</h1>
+        <BackLink href="/">Search</BackLink>
+        <h1 className="title-lg mt-3">{park.name}</h1>
       </div>
 
-      <form className="card flex flex-wrap items-end gap-3">
-        <div>
-          <label className="label" htmlFor="date">Arrive</label>
-          <input className="input" id="date" type="date" name="date" defaultValue={date} min={today} />
-        </div>
-        <div>
-          <label className="label" htmlFor="nights">Nights</label>
-          <input className="input w-24" id="nights" type="number" name="nights" min={1} max={14} defaultValue={nights} />
-        </div>
-        <button className="btn">Update</button>
-      </form>
+      <StayPicker date={date} nights={nights} min={today} />
 
-      {campgrounds.length === 0 ? (
-        <p className="text-muted">No reservable campgrounds found for this park.</p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {campgrounds.map((c) => (
-            <li key={c.facilityId}>
-              <Link
-                href={`/campgrounds/${c.facilityId}?start=${date}`}
-                className="card flex items-center justify-between gap-3 hover:border-accent"
-              >
-                <span className="font-medium">{c.name}</span>
-                {c.available !== null && (
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      c.available ? "bg-accent-soft text-accent" : "bg-line/60 text-muted"
-                    }`}
-                  >
-                    {c.available ? "Sites open" : "Full"}
-                  </span>
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section>
+        <h2 className="group-header">Campgrounds</h2>
+        {campgrounds.length === 0 ? (
+          <p className="card text-muted">No campgrounds here can be booked online.</p>
+        ) : (
+          <ul className="group-list">
+            {campgrounds.map((c) => (
+              <li key={c.facilityId}>
+                <Link href={`/campgrounds/${c.facilityId}?start=${date}`} className="row row-hover min-h-[60px]">
+                  <span className="flex-1 font-medium">{c.name}</span>
+                  {c.available !== null &&
+                    (c.available ? (
+                      <span className="badge badge-open">
+                        <span className="h-1.5 w-1.5 rounded-full bg-open" /> Available
+                      </span>
+                    ) : (
+                      <span className="badge badge-muted">Full</span>
+                    ))}
+                  <ChevronRight size={18} className="text-faint" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="group-footer">Availability for the dates above. Open a campground to see every site.</p>
+      </section>
     </div>
   );
 }

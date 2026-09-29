@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { removePushSubscription, savePushSubscription, sendTestPush } from "@/app/settings/actions";
+import { AppMark, BellIcon, PlusIcon, ShareIcon } from "./Icons";
 
 type Status = "loading" | "unsupported" | "needs-install" | "denied" | "off" | "on";
 
@@ -96,68 +97,94 @@ export default function NotificationSettings({ deviceCount }: { deviceCount: num
         : { kind: "ok", text: `Test sent to ${result.delivered} device${result.delivered === 1 ? "" : "s"}.` });
     });
 
+  const statusText = {
+    loading: "Checking…",
+    unsupported: "Not supported in this browser",
+    "needs-install": "Add to Home Screen first",
+    denied: "Blocked",
+    off: "Off",
+    on: "On",
+  }[status];
+
   return (
-    <section className="card space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Notifications on this device</h2>
-        <p className="text-sm text-muted">
-          {deviceCount
-            ? `Alerts go to ${deviceCount} device${deviceCount === 1 ? "" : "s"} on your account.`
-            : "No devices are receiving alerts yet."}
-        </p>
+    <section>
+      <h2 className="group-header">Notifications</h2>
+      <div className="group-list">
+        <div className="row">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger text-white">
+            <BellIcon size={18} strokeWidth={2} />
+          </span>
+          <span className="flex-1">This device</span>
+          <span className={`text-[17px] ${status === "on" ? "text-open-ink" : "text-muted"}`}>{statusText}</span>
+        </div>
+
+        {status === "off" && (
+          <button className="row row-hover text-accent" onClick={enable} disabled={pending}>
+            {pending ? "Turning on…" : "Turn On Notifications"}
+          </button>
+        )}
+        {status === "on" && (
+          <>
+            <button className="row row-hover text-accent" onClick={test} disabled={pending}>
+              Send Test Notification
+            </button>
+            <button className="row row-hover text-danger-ink" onClick={disable} disabled={pending}>
+              Turn Off on This Device
+            </button>
+          </>
+        )}
       </div>
 
-      {status === "loading" && <p className="text-sm text-muted">Checking…</p>}
-
-      {status === "needs-install" && <InstallSteps />}
-
-      {status === "unsupported" && (
-        <p className="text-sm">
-          This browser doesn&apos;t support web notifications. On iPhone, open this site in Safari and add it to your Home
-          Screen (iOS 16.4 or later).
-        </p>
-      )}
-
-      {status === "denied" && (
-        <p className="text-sm">
-          Notifications are blocked for this site. On iPhone go to <b>Settings → Notifications → Campsites</b> and allow
-          them; in a desktop browser, allow notifications in the site settings. Then reload this page.
-        </p>
-      )}
-
-      {status === "off" && (
-        <button className="btn" onClick={enable} disabled={pending}>
-          {pending ? "Turning on…" : "Turn on notifications"}
-        </button>
-      )}
-
-      {status === "on" && (
-        <div className="flex flex-wrap gap-2">
-          <button className="btn" onClick={test} disabled={pending}>Send test notification</button>
-          <button className="btn-secondary" onClick={disable} disabled={pending}>Turn off on this device</button>
-        </div>
-      )}
-
       {message && (
-        <p className={`text-sm ${message.kind === "error" ? "text-danger" : "text-accent"}`} role="status">
+        <p className={`group-footer ${message.kind === "error" ? "text-danger-ink" : "text-open-ink"}`} role="status">
           {message.text}
         </p>
       )}
+      {!message && (
+        <p className="group-footer">
+          {status === "denied"
+            ? "Notifications are blocked for this site. On iPhone, go to Settings › Notifications › Campsites and allow them, then reload."
+            : status === "unsupported"
+              ? "This browser can't receive web notifications. On iPhone, open this site in Safari and add it to your Home Screen (iOS 16.4 or later)."
+              : deviceCount
+                ? `Alerts go to ${deviceCount} device${deviceCount === 1 ? "" : "s"} on your account. Turn notifications on for each one you want alerts on.`
+                : "No devices are receiving alerts yet."}
+        </p>
+      )}
+
+      {status === "needs-install" && <InstallSteps />}
     </section>
   );
 }
 
 function InstallSteps() {
+  const steps = [
+    { icon: <CompassBadge />, text: <>Open this page in <b>Safari</b>.</> },
+    { icon: <ShareIcon size={20} className="text-accent" />, text: <>Tap <b>Share</b> in the toolbar.</> },
+    { icon: <PlusIcon size={20} className="text-fg" />, text: <>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</> },
+    { icon: <AppMark size={22} />, text: <>Open <b>Campsites</b> from your Home Screen and return here.</> },
+  ];
   return (
-    <div className="space-y-2 text-sm">
-      <p className="font-medium">On iPhone, add this app to your Home Screen first:</p>
-      <ol className="list-decimal space-y-1 pl-5">
-        <li>Open this page in <b>Safari</b>.</li>
-        <li>Tap the <b>Share</b> button (the square with an arrow pointing up).</li>
-        <li>Choose <b>Add to Home Screen</b>, then tap <b>Add</b>.</li>
-        <li>Open <b>Campsites</b> from your Home Screen, sign in, and come back to Settings.</li>
+    <div className="mt-8">
+      <h2 className="group-header">Add to Home Screen</h2>
+      <ol className="group-list">
+        {steps.map((s, i) => (
+          <li key={i} className="row">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fill">{s.icon}</span>
+            <span className="text-[15px]">{s.text}</span>
+          </li>
+        ))}
       </ol>
-      <p className="text-muted">Apple only lets web apps send notifications once they&apos;re on the Home Screen (iOS 16.4+).</p>
+      <p className="group-footer">Apple lets web apps send notifications once they&apos;re on your Home Screen (iOS 16.4 or later).</p>
     </div>
+  );
+}
+
+function CompassBadge() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="10" fill="#0a84ff" />
+      <path d="m15.5 8.5-2 5-5 2 2-5z" fill="#fff" />
+    </svg>
   );
 }

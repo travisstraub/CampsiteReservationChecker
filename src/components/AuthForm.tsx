@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import type { AuthState } from "@/app/auth/actions";
+import { AppMark } from "./Icons";
 
 type Props = {
   mode: "login" | "signup";
@@ -16,37 +17,54 @@ export default function AuthForm({ mode, action, next, initialError }: Props) {
   const isLogin = mode === "login";
 
   return (
-    <div className="mx-auto max-w-sm">
-      <h1 className="mb-6 text-2xl font-semibold">{isLogin ? "Sign in" : "Create an account"}</h1>
-      <form action={formAction} className="card space-y-4">
-        <input type="hidden" name="next" value={next ?? ""} />
-        <div>
-          <label className="label" htmlFor="email">Email</label>
-          <input className="input" id="email" name="email" type="email" autoComplete="email" required />
+    <div className="mx-auto flex max-w-sm flex-col items-center pt-4 text-center md:pt-10">
+      <AppMark size={64} />
+      <h1 className="title-lg mt-6">{isLogin ? "Sign in" : "Create account"}</h1>
+      <p className="mt-2 text-[17px] text-muted">
+        {isLogin ? "Welcome back. Sign in to manage your alerts." : "Get notified the moment a campsite opens up."}
+      </p>
+
+      {state.message ? (
+        <div className="card mt-8 w-full">
+          <p className="title-md">Check your email</p>
+          <p className="mt-1 text-[15px] text-muted">{state.message}</p>
         </div>
-        <div>
-          <label className="label" htmlFor="password">Password</label>
-          <input
-            className="input"
-            id="password"
-            name="password"
-            type="password"
-            minLength={isLogin ? undefined : 8}
-            autoComplete={isLogin ? "current-password" : "new-password"}
-            required
-          />
-        </div>
-        {state.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
-        {state.message && <p className="text-sm text-accent" role="status">{state.message}</p>}
-        <button className="btn w-full" disabled={pending}>
-          {pending ? "Please wait…" : isLogin ? "Sign in" : "Sign up"}
-        </button>
-      </form>
-      <p className="mt-4 text-center text-sm text-muted">
+      ) : (
+        <form action={formAction} className="mt-8 w-full space-y-4 text-left">
+          <input type="hidden" name="next" value={next ?? ""} />
+          <div className="group-list">
+            <input
+              className="h-[52px] w-full bg-transparent px-4 text-[17px] outline-none placeholder:text-faint"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="Email"
+              aria-label="Email"
+              required
+            />
+            <input
+              className="h-[52px] w-full bg-transparent px-4 text-[17px] outline-none placeholder:text-faint"
+              name="password"
+              type="password"
+              minLength={isLogin ? undefined : 8}
+              autoComplete={isLogin ? "current-password" : "new-password"}
+              placeholder={isLogin ? "Password" : "Password (8+ characters)"}
+              aria-label="Password"
+              required
+            />
+          </div>
+          {state.error && <p className="px-1 text-[15px] text-danger-ink" role="alert">{state.error}</p>}
+          <button className="btn btn-lg w-full" disabled={pending}>
+            {pending ? "Please wait…" : isLogin ? "Sign In" : "Create Account"}
+          </button>
+        </form>
+      )}
+
+      <p className="mt-6 text-[15px] text-muted">
         {isLogin ? (
-          <>No account? <Link className="text-accent underline" href="/signup">Sign up</Link></>
+          <>New here? <Link className="link" href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>Create an account</Link></>
         ) : (
-          <>Already have an account? <Link className="text-accent underline" href="/login">Sign in</Link></>
+          <>Already have an account? <Link className="link" href="/login">Sign in</Link></>
         )}
       </p>
     </div>
