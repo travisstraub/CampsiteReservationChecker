@@ -27,7 +27,7 @@ Each opening is sent once. If the site is booked and later opens up again, you'r
 ### 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In the **SQL Editor**, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+2. In the **SQL Editor**, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and then [`0002_grants.sql`](supabase/migrations/0002_grants.sql).
 3. Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `https://<your-app>.vercel.app/auth/confirm` to **Redirect URLs**.
 4. Copy the project URL, the publishable key and the secret key from **Project Settings → API Keys**.
 
