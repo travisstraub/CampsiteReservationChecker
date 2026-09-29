@@ -1,8 +1,8 @@
 import "server-only";
-import { findStays, type Stay, type Unit } from "./availability";
-import { formatShort, todayInCalifornia } from "./dates";
+import { findStays, findUpcomingStays, type Stay, type Unit } from "./availability";
+import { formatLocalTime, formatShort, todayInCalifornia } from "./dates";
 import { sendToUser } from "./push";
-import { bookingUrl, getAvailability } from "./reservecalifornia";
+import { getAvailability } from "./reservecalifornia";
 import { createAdminClient } from "./supabase/admin";
 
 type AlertRow = {
@@ -18,7 +18,15 @@ type AlertRow = {
   arrival_days: number[];
 };
 
-export type Opening = Stay & { unitId: string; siteLabel: string };
+export type OpeningKind = "open" | "unlock";
+
+export type Opening = Stay & {
+  kind: OpeningKind;
+  unitId: string;
+  siteLabel: string;
+  /** For "unlock" openings: when the site becomes bookable, California time. */
+  unlockAt: string | null;
+};
 
 export type CheckSummary = {
   alerts: number;
@@ -27,27 +35,36 @@ export type CheckSummary = {
   errors: string[];
 };
 
-/** Openings an alert matches, given the campground's current availability. */
+/**
+ * Openings an alert matches, given the campground's current availability:
+ * stays bookable now, and stays that will be once locked nights unlock.
+ */
 export function openingsForAlert(alert: AlertRow, units: Unit[], today: string): Opening[] {
-  const start = alert.start_date > today ? alert.start_date : today;
+  const criteria = {
+    start: alert.start_date > today ? alert.start_date : today,
+    end: alert.end_date,
+    minNights: alert.min_nights,
+    arrivalDays: alert.arrival_days,
+  };
   const openings: Opening[] = [];
   for (const unit of units) {
     if (alert.unit_ids.length && !alert.unit_ids.includes(unit.unitId)) continue;
-    const stays = findStays(unit.available, {
-      start,
-      end: alert.end_date,
-      minNights: alert.min_nights,
-      arrivalDays: alert.arrival_days,
-    });
-    for (const s of stays) openings.push({ ...s, unitId: unit.unitId, siteLabel: unit.label });
+    const site = { unitId: unit.unitId, siteLabel: unit.label };
+    for (const s of findStays(unit.available, criteria)) {
+      openings.push({ ...s, ...site, kind: "open", unlockAt: null });
+    }
+    for (const s of findUpcomingStays(unit, criteria)) {
+      openings.push({ ...s, ...site, kind: "unlock" });
+    }
   }
   return openings.sort((a, b) => a.arrival.localeCompare(b.arrival) || a.siteLabel.localeCompare(b.siteLabel));
 }
 
-export function formatNotification(facilityName: string, openings: Opening[]): string {
-  const lines = openings
-    .slice(0, 4)
-    .map((o) => `${o.siteLabel}: ${formatShort(o.arrival)} (${o.nights} night${o.nights === 1 ? "" : "s"})`);
+export function formatNotification(openings: Opening[]): string {
+  const lines = openings.slice(0, 4).map((o) => {
+    const stay = `${o.siteLabel}: ${formatShort(o.arrival)} (${o.nights} night${o.nights === 1 ? "" : "s"})`;
+    return o.unlockAt ? `${stay}, unlocks ${formatLocalTime(o.unlockAt)}` : stay;
+  });
   if (openings.length > 4) lines.push(`+${openings.length - 4} more`);
   return lines.join("\n");
 }
@@ -112,42 +129,48 @@ async function processAlert(
 ): Promise<number> {
   const { data: seen, error } = await db
     .from("alert_openings")
-    .select("unit_id, arrival")
+    .select("unit_id, arrival, kind")
     .eq("alert_id", alert.id);
   if (error) throw error;
 
-  const key = (unitId: string, arrival: string) => `${unitId}|${arrival}`;
-  const seenKeys = new Set(seen.map((s) => key(s.unit_id, s.arrival)));
-  const currentKeys = new Set(openings.map((o) => key(o.unitId, o.arrival)));
+  const key = (o: { unit_id: string; arrival: string; kind: string }) => `${o.unit_id}|${o.arrival}|${o.kind}`;
+  const current = openings.map((o) => ({ ...o, unit_id: o.unitId }));
+  const seenKeys = new Set(seen.map(key));
+  const currentKeys = new Set(current.map(key));
 
   // Forget openings that are gone, so they alert again if they come back.
-  const gone = seen.filter((s) => !currentKeys.has(key(s.unit_id, s.arrival)));
-  for (const g of gone) {
-    await db.from("alert_openings").delete().match({ alert_id: alert.id, unit_id: g.unit_id, arrival: g.arrival });
+  for (const g of seen.filter((s) => !currentKeys.has(key(s)))) {
+    await db.from("alert_openings").delete().match({ alert_id: alert.id, unit_id: g.unit_id, arrival: g.arrival, kind: g.kind });
   }
 
-  const fresh = openings.filter((o) => !seenKeys.has(key(o.unitId, o.arrival)));
-  if (!fresh.length) return 0;
+  const fresh = current.filter((o) => !seenKeys.has(key(o)));
+  let notified = 0;
+  for (const kind of ["open", "unlock"] as const) {
+    const batch = fresh.filter((o) => o.kind === kind);
+    if (!batch.length) continue;
+    const delivered = await sendToUser(alert.user_id, {
+      title: kind === "open" ? `Campsite open: ${alert.facility_name}` : `Unlocking soon: ${alert.facility_name}`,
+      body: formatNotification(batch),
+      url: `/alerts/${alert.id}`,
+      tag: `alert-${alert.id}-${kind}`,
+    });
+    // Only mark as notified if it actually reached a device, so users who
+    // haven't enabled notifications yet still get told later.
+    if (delivered === 0) continue;
 
-  const delivered = await sendToUser(alert.user_id, {
-    title: `Campsite open: ${alert.facility_name}`,
-    body: formatNotification(alert.facility_name, fresh),
-    url: bookingUrl(alert.place_id, alert.facility_id),
-    tag: `alert-${alert.id}`,
-  });
-  // Only mark as notified if it actually reached a device, so users who
-  // haven't enabled notifications yet still get told later.
-  if (delivered === 0) return 0;
-
-  const { error: insertError } = await db.from("alert_openings").upsert(
-    fresh.map((o) => ({
-      alert_id: alert.id,
-      unit_id: o.unitId,
-      arrival: o.arrival,
-      site_label: o.siteLabel,
-      nights: o.nights,
-    })),
-  );
-  if (insertError) throw insertError;
-  return 1;
+    const { error: insertError } = await db.from("alert_openings").upsert(
+      batch.map((o) => ({
+        alert_id: alert.id,
+        unit_id: o.unitId,
+        arrival: o.arrival,
+        kind: o.kind,
+        site_label: o.siteLabel,
+        nights: o.nights,
+        unlock_at: o.unlockAt,
+      })),
+    );
+    if (insertError) throw insertError;
+    notified++;
+  }
+  return notified;
 }

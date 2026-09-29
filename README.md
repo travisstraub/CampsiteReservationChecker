@@ -4,8 +4,9 @@ Campsite Watch is a web app for finding campsites through [ReserveCalifornia](ht
 
 - **Search** California state parks. You see each campground and how many sites are open.
 - **Availability grid**: see which sites are free, night by night, for 7, 14 or 30 days.
+- **Unlock alerts**: when a site is cancelled, ReserveCalifornia locks it until a set time (often 8am the next day). The grid shows these nights in amber, and alerts send an "Unlocking soon" notification with the unlock time so you can be ready.
 - **Alerts**: watch a campground, or only the sites you tick, for a date range. You can set a minimum number of nights and allowed arrival days (for example, Fri/Sat only).
-- **Notifications** use Web Push. On **iPhone**, add the site to your Home Screen from Safari (iOS 16.4+), then turn on notifications in **Settings**. Web Push also works in desktop Chrome, Edge, Firefox and Safari, and on Android. Tapping a notification opens the campground on ReserveCalifornia so you can book it.
+- **Notifications** use Web Push. On **iPhone**, add the site to your Home Screen from Safari (iOS 16.4+), then turn on notifications in **Settings**. Web Push also works in desktop Chrome, Edge, Firefox and Safari, and on Android. Tapping a notification opens the alert's page, which re-checks live whether each site is still free, spells out exactly what to pick (site, arrival date, nights) and has a one-tap button to the campground on ReserveCalifornia.
 - **Accounts**: email/password sign-ups through Supabase Auth.
 
 ## How it works
@@ -20,7 +21,7 @@ GitHub Actions (every 5 min) ──► /api/cron/check on Vercel
 
 Vercel's free Hobby plan only runs cron jobs once a day, so a GitHub Actions schedule calls the check endpoint instead (`.github/workflows/check-availability.yml`). If you're on Vercel Pro, you can use Vercel Cron instead; it sends the same `Authorization: Bearer $CRON_SECRET` header.
 
-Each opening is sent once. If the site is booked and later opens up again, you're notified again. An opening only counts as sent once it reaches at least one of your devices, so if you create an alert before turning on notifications, you'll still hear about openings that are already there.
+Each opening is sent once (an "unlocking soon" notice and the later "open now" notice count separately). If the site is booked and later opens up again, you're notified again. An opening only counts as sent once it reaches at least one of your devices, so if you create an alert before turning on notifications, you'll still hear about openings that are already there.
 
 ## Setup
 

@@ -10,6 +10,8 @@
   --accent-fg: #ffffff;
   --accent-soft: #e3efe4;
   --open: #3f9a55;
+  --lock: #9a6b00;
+  --lock-soft: #f6ecd2;
   --danger: #b3261e;
 }
 
@@ -24,6 +26,8 @@
     --accent-fg: #0f1a11;
     --accent-soft: #1f3324;
     --open: #4fae66;
+    --lock: #e0b44f;
+    --lock-soft: #3a3020;
     --danger: #ff8a80;
   }
 }
@@ -38,6 +42,8 @@
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
   --color-open: var(--open);
+  --color-lock: var(--lock);
+  --color-lock-soft: var(--lock-soft);
   --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
 }
