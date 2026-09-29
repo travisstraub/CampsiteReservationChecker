@@ -2,9 +2,11 @@ import "server-only";
 import { mergeUnits, parseGrid, type GridResponse, type Unit } from "./availability";
 import { toRcDate, windows } from "./dates";
 
-// ReserveCalifornia's website is backed by this (unofficial, undocumented) API.
+// ReserveCalifornia's website is backed by this (unofficial, undocumented) API,
+// hosted by Tyler Technologies since late 2025 (previously calirdr.usedirect.com).
 // RC_API_URL can point at a mock server for local development.
-const API = process.env.RC_API_URL ?? "https://calirdr.usedirect.com/RDR/rdr";
+const API =
+  process.env.RC_API_URL ?? "https://california-rdr.prod.cali.rd12.recreation-management.tylerapp.com/rdr";
 const GRID_WINDOW_DAYS = 30;
 
 const HEADERS = {
@@ -21,24 +23,33 @@ export type Campground = {
   facilityId: string;
   placeId: string;
   name: string;
-  /** Sites free on the searched date, when the API reports it. */
-  available: number | null;
+  /** Whether any site is free on the searched date, when the API reports it. */
+  available: boolean | null;
 };
 
 export function bookingUrl(placeId: string | null, facilityId: string): string {
   return placeId
-    ? `https://www.reservecalifornia.com/Web/#!park/${placeId}/${facilityId}`
+    ? `https://www.reservecalifornia.com/park/${placeId}/${facilityId}`
     : "https://www.reservecalifornia.com/";
 }
 
 async function rc<T>(path: string, init?: { body?: unknown }): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    method: init?.body ? "POST" : "GET",
-    headers: HEADERS,
-    body: init?.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, {
+      method: init?.body ? "POST" : "GET",
+      headers: HEADERS,
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (e) {
+    // Node reports every network failure as "fetch failed"; the reason is in `cause`.
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    const reason = cause?.code ?? cause?.message ?? (e as Error).message;
+    console.error(`ReserveCalifornia ${path} request failed`, e);
+    throw new Error(`ReserveCalifornia ${path} request failed: ${reason}`);
+  }
   if (!res.ok) throw new Error(`ReserveCalifornia ${path} returned HTTP ${res.status}`);
   return (await res.json()) as T;
 }
@@ -65,6 +76,7 @@ type RawFacility = {
   PlaceId: number | string;
   Name?: string;
   IsActive?: boolean;
+  AllowWebBooking?: boolean;
 };
 
 export function listParks(): Promise<Park[]> {
@@ -96,12 +108,15 @@ export async function getPark(placeId: string): Promise<Park | null> {
   return (await listParks()).find((p) => p.placeId === placeId) ?? null;
 }
 
-/** Campgrounds in a park, with free-site counts for `date` when available. */
+/** Campgrounds in a park, flagged by whether any site is free on `date`. */
 export async function listCampgrounds(placeId: string, date: string, nights: number): Promise<Campground[]> {
   try {
     type PlaceSearch = {
       SelectedPlace?: {
-        Facilities?: Record<string, { FacilityId: number; Name: string; Available?: number }>;
+        Facilities?: Record<
+          string,
+          { FacilityId: number; Name: string; Available?: boolean; FacilityAllowWebBooking?: boolean }
+        >;
       };
     };
     const res = await rc<PlaceSearch>("/search/place", {
@@ -117,14 +132,16 @@ export async function listCampgrounds(placeId: string, date: string, nights: num
         UnitTypesGroupIds: [],
       },
     });
-    const facilities = Object.values(res.SelectedPlace?.Facilities ?? {});
+    const facilities = Object.values(res.SelectedPlace?.Facilities ?? {}).filter(
+      (f) => f.FacilityAllowWebBooking !== false,
+    );
     if (facilities.length) {
       return facilities
         .map((f) => ({
           facilityId: String(f.FacilityId),
           placeId,
           name: f.Name,
-          available: typeof f.Available === "number" ? f.Available : null,
+          available: typeof f.Available === "boolean" ? f.Available : null,
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -133,7 +150,9 @@ export async function listCampgrounds(placeId: string, date: string, nights: num
   }
   const all = await listFacilities();
   return all
-    .filter((f) => String(f.PlaceId) === placeId && f.IsActive !== false && f.Name)
+    .filter(
+      (f) => String(f.PlaceId) === placeId && f.IsActive !== false && f.AllowWebBooking !== false && f.Name,
+    )
     .map((f) => ({ facilityId: String(f.FacilityId), placeId, name: f.Name!, available: null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -54,6 +54,19 @@ describe("parseGrid", () => {
     ]);
   });
 
+  it("skips sites that can't be booked online", () => {
+    const units = parseGrid({
+      Facility: {
+        Units: {
+          a: { UnitId: 1, Name: "Site 1", AllowWebBooking: false, Slices: slice("2030-06-01") },
+          b: { UnitId: 2, Name: "Site 2", IsWebViewable: false, Slices: slice("2030-06-01") },
+          c: { UnitId: 3, Name: "Site 3", AllowWebBooking: true, Slices: slice("2030-06-01") },
+        },
+      },
+    });
+    expect(units.map((u) => u.label)).toEqual(["Site 3"]);
+  });
+
   it("tolerates empty responses", () => {
     expect(parseGrid(undefined)).toEqual([]);
     expect(parseGrid({ Facility: null })).toEqual([]);

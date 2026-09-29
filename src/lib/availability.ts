@@ -34,6 +34,8 @@ type GridUnit = {
   Name?: string;
   ShortName?: string;
   UnitTypeName?: string;
+  AllowWebBooking?: boolean;
+  IsWebViewable?: boolean;
   Slices?: Record<string, Slice>;
 };
 
@@ -48,7 +50,11 @@ function sliceAvailable(s: Slice): boolean {
 /** Parse the /search/grid response into units with their available dates. */
 export function parseGrid(grid: GridResponse | null | undefined): Unit[] {
   const units = grid?.Facility?.Units ?? {};
-  return Object.entries(units).map(([key, u]) => {
+  // Skip sites that can't be booked online (e.g. first-come, first-served).
+  const bookable = Object.entries(units).filter(
+    ([, u]) => u.AllowWebBooking !== false && u.IsWebViewable !== false,
+  );
+  return bookable.map(([key, u]) => {
     const available = Object.entries(u.Slices ?? {})
       .filter(([, s]) => sliceAvailable(s))
       .map(([k, s]) => String(s.Date ?? k).slice(0, 10))
